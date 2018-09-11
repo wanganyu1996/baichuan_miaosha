@@ -15,7 +15,15 @@ public class MQSender {
     @Autowired
     AmqpTemplate amqpTemplate;
 
-    public void send(Object message){
+    public void sendMiaoshaMessage(MiaoshaMessage miaoshaMessage) {
+        String msg=RedisService.beanToString(miaoshaMessage);
+        log.info("send message:"+msg);
+        amqpTemplate.convertAndSend(MQConfig.MIAOSHA_QUEUE,msg);
+    }
+     
+    
+    
+/*    public void send(Object message){
         String msg=RedisService.beanToString(message);
         log.info("send message:"+msg);
        amqpTemplate.convertAndSend(MQConfig.QUEUE,msg);
@@ -39,5 +47,5 @@ public class MQSender {
         properties.setHeader("header2","value2");
         Message obj=new Message(msg.getBytes(),properties);
         amqpTemplate.convertAndSend(MQConfig.HEADERS_EXCHANGE,"",obj);
-    }
+    }*/
 }

@@ -28,7 +28,7 @@ public class SampleController {
 	MQSender sender;
 
 
-    @RequestMapping("/mq")
+    /*@RequestMapping("/mq")
     @ResponseBody
     public Result<String> mq() {
         sender.send("hello,rabbit mq");
@@ -51,7 +51,7 @@ public class SampleController {
     public Result<String> sendFanout() {
         sender.sendFanout("hello,rabbit mq");
         return Result.success("Hello，world");
-    }
+    }*/
 
 
     @RequestMapping("/hello")
