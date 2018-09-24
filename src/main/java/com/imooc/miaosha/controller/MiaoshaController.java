@@ -2,11 +2,13 @@ package com.imooc.miaosha.controller;
 
 import com.imooc.miaosha.rabbitmq.MQSender;
 import com.imooc.miaosha.rabbitmq.MiaoshaMessage;
+import com.imooc.miaosha.redis.AccessKey;
 import com.imooc.miaosha.redis.GoodsKey;
 import com.imooc.miaosha.redis.MiaoshaKey;
 import com.imooc.miaosha.result.Result;
 import com.imooc.miaosha.util.MD5Util;
 import com.imooc.miaosha.util.UUIDUtil;
+import com.rabbitmq.client.AMQP;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
@@ -24,6 +26,12 @@ import com.imooc.miaosha.service.MiaoshaUserService;
 import com.imooc.miaosha.service.OrderService;
 import com.imooc.miaosha.vo.GoodsVo;
 
+import javax.imageio.ImageIO;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -143,14 +151,50 @@ public class MiaoshaController implements InitializingBean {
     }
     @RequestMapping(value = "/path", method = RequestMethod.GET)
     @ResponseBody
-    public Result<String> getMiaoshaPath(Model model, MiaoshaUser user,
-                                     @RequestParam("goodsId") long goodsId) {
+    public Result<String> getMiaoshaPath(HttpServletRequest request,MiaoshaUser user,
+                                         @RequestParam("goodsId") long goodsId, @RequestParam(value = "verifyCode",defaultValue = "0") int verifyCode) {
+        if (user == null) {
+            return Result.error(CodeMsg.SESSION_ERROR);
+        }
+        //查询访问的次数，限流
+        String uri=request.getRequestURI();
+        String key=uri+"_"+user.getId();
+        Integer count=redisService.get(AccessKey.access,""+key,Integer.class);
+        if(count==null){
+            redisService.set(AccessKey.access,key,1);
+        }else if(count<5){
+           redisService.incr(AccessKey.access,key);
+        }else{
+            return Result.error(CodeMsg.ACCESS_LIMIT_REACHED);
+        }
+        boolean check=miaoshaService.checkVerifyCode(user,goodsId,verifyCode);
+        if(!check){
+            return Result.error(CodeMsg.REQUEST_ILLEGAL);
+        }
+
+        String path=miaoshaService.createMiaoshaPath(user,goodsId);
+
+        return Result.success(path);
+    }
+    @RequestMapping(value = "/verifyCode", method = RequestMethod.GET)
+    @ResponseBody
+    public Result<String> getMiaoshaVerifyCode(HttpServletResponse response,Model model, MiaoshaUser user,
+                                               @RequestParam("goodsId") long goodsId) {
         model.addAttribute("user", user);
         if (user == null) {
             return Result.error(CodeMsg.SESSION_ERROR);
         }
-        String path=miaoshaService.createMiaoshaPath(user,goodsId);
 
-        return Result.success(path);
+        try {
+            BufferedImage image=miaoshaService.createVerifyCode(user,goodsId);
+            OutputStream out=response.getOutputStream();
+            ImageIO.write(image,"JPEG",out);
+            out.flush();
+            out.close();
+            return null;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return Result.error(CodeMsg.MIAOSHA_FAIL);
+        }
     }
 }
